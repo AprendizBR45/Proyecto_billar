@@ -45,7 +45,7 @@ class Mesa(ctk.CTkFrame):
         ahora = datetime.now()
         minutos_reales = int((ahora - self.inicio).total_seconds() / 60)
         
-        # Lógica de Redondeo 5 min
+        # Lógica de Redondeo (Menor a 5 baja a 0, 5 o más sube a 10)
         unidad = minutos_reales % 10
         min_cobrados = minutos_reales - unidad if unidad < 5 else minutos_reales + (10 - unidad)
         if min_cobrados == 0 and minutos_reales > 0: min_cobrados = 10
@@ -53,8 +53,8 @@ class Mesa(ctk.CTkFrame):
         monto = round((min_cobrados / 60) * self.precio_hora, 2)
 
         v = ctk.CTkToplevel(self)
-        v.title("Finalizar")
-        v.geometry("300x400")
+        v.title("Finalizar Pago")
+        v.geometry("300x450")
         v.attributes("-topmost", True)
 
         ctk.CTkLabel(v, text=f"COBRO MESA {self.numero}", font=("Arial", 18, "bold")).pack(pady=10)
@@ -99,6 +99,7 @@ class Dashboard(ctk.CTk):
         ctk.CTkButton(self.top_bar, text="Cerrar Sesión", fg_color="#c0392b", width=100, command=self.logout).pack(side="right", padx=5)
         ctk.CTkButton(self.top_bar, text="Reporte", fg_color="#2980b9", width=100, command=self.ver_reporte).pack(side="right", padx=5)
         ctk.CTkButton(self.top_bar, text="Usuarios", fg_color="#8e44ad", width=100, command=self.gestionar_usuarios).pack(side="right", padx=5)
+        ctk.CTkButton(self.top_bar, text="Perfil", fg_color="#34495e", width=100, command=self.mi_perfil).pack(side="right", padx=5)
 
         # GRID DE MESAS
         self.grid_mesas = ctk.CTkFrame(self)
@@ -111,51 +112,45 @@ class Dashboard(ctk.CTk):
 
     def logout(self):
         self.destroy()
-        from main import Login
-        Login().mainloop()
+        # Esto permite que el sistema regrese al login
+        import main
+        app = main.Login()
+        app.mainloop()
 
     def ver_reporte(self):
         v = ctk.CTkToplevel(self)
-        v.title("Caja del Día")
-        v.geometry("400x450")
+        v.title("Reporte Detallado")
+        v.geometry("700x600")
         v.attributes("-topmost", True)
 
+        ctk.CTkLabel(v, text="HISTORIAL DE VENTAS", font=("Arial", 20, "bold")).pack(pady=10)
+        
+        txt_reporte = ctk.CTkTextbox(v, width=650, height=300)
+        txt_reporte.pack(pady=10)
+        
         conn = sqlite3.connect("billar.db")
         cursor = conn.cursor()
-        cursor.execute("SELECT SUM(total) FROM ventas WHERE metodo_pago='Efectivo'")
-        efectivo = cursor.fetchone()[0] or 0.0
-        cursor.execute("SELECT SUM(total) FROM ventas WHERE metodo_pago='QR'")
-        qr = cursor.fetchone()[0] or 0.0
-        conn.close()
+        cursor.execute("SELECT fecha, mesa, total, metodo_pago, vendedor FROM ventas ORDER BY id DESC")
+        ventas = cursor.fetchall()
+        
+        total_efectivo = 0
+        total_qr = 0
 
-        ctk.CTkLabel(v, text="RESUMEN DE CAJA", font=("Arial", 20, "bold")).pack(pady=20)
-        ctk.CTkLabel(v, text=f"Efectivo: {efectivo:.2f} Bs", font=("Arial", 16)).pack(pady=10)
-        ctk.CTkLabel(v, text=f"Pago QR: {qr:.2f} Bs", font=("Arial", 16)).pack(pady=10)
-        ctk.CTkLabel(v, text=f"TOTAL: {efectivo+qr:.2f} Bs", font=("Arial", 22, "bold"), text_color="green").pack(pady=30)
+        txt_reporte.insert("0.0", f"{'FECHA':<18} | {'MESA':<8} | {'TOTAL':<8} | {'PAGO':<8} | {'VEND':<10}\n")
+        txt_reporte.insert("end", "-"*75 + "\n")
+
+        for f, m, t, met, vend in ventas:
+            txt_reporte.insert("end", f"{f:<18} | {m:<8} | {t:<8.2f} | {met:<8} | {vend:<10}\n")
+            if met == "Efectivo": total_efectivo += t
+            else: total_qr += t
+        
+        conn.close()
+        txt_reporte.configure(state="disabled")
+
+        ctk.CTkLabel(v, text=f"Efectivo: {total_efectivo:.2f} Bs | QR: {total_qr:.2f} Bs", font=("Arial", 16)).pack(pady=10)
+        ctk.CTkLabel(v, text=f"TOTAL CAJA: {total_efectivo + total_qr:.2f} Bs", font=("Arial", 22, "bold"), text_color="green").pack(pady=10)
 
     def gestionar_usuarios(self):
         v = ctk.CTkToplevel(self)
-        v.title("Crear Usuario")
-        v.geometry("300x400")
-        v.attributes("-topmost", True)
-
-        ctk.CTkLabel(v, text="NUEVO USUARIO", font=("Arial", 16, "bold")).pack(pady=20)
-        nom = ctk.CTkEntry(v, placeholder_text="Nombre Real")
-        nom.pack(pady=5)
-        user = ctk.CTkEntry(v, placeholder_text="Usuario Login")
-        user.pack(pady=5)
-        pas = ctk.CTkEntry(v, placeholder_text="Contraseña", show="*")
-        pas.pack(pady=5)
-
-        def guardar():
-            try:
-                conn = sqlite3.connect("billar.db")
-                cursor = conn.cursor()
-                cursor.execute("INSERT INTO usuarios (nombre, usuario, password) VALUES (?,?,?)", (nom.get(), user.get(), pas.get()))
-                conn.commit()
-                conn.close()
-                messagebox.showinfo("Éxito", "Usuario creado")
-                v.destroy()
-            except: messagebox.showerror("Error", "El usuario ya existe")
-
-        ctk.CTkButton(v, text="Guardar", command=guardar).pack(pady=20)        
+        v.title("Gestión de Usuarios")
+        v.
